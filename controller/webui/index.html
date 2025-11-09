@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bot Monitor • NX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            base: { 900: '#0b0e14', 800: '#0f1420', 700: '#131a2a', 600: '#182139', 500: '#1e2a4a', 400: '#354c7c' }
+          },
+          boxShadow: {
+            glow: '0 10px 30px rgba(56, 189, 248, 0.15)',
+            card: '0 2px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)'
+          },
+          backdropBlur: { xs: '2px' }
+        }
+      }
+    }
+  </script>
+  <style>
+    html, body { height: 100%; }
+    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+    .grad-text {
+      background: linear-gradient(90deg, #60a5fa, #22d3ee 35%, #a78bfa 70%, #f472b6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .panel { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03); backdrop-filter: blur(6px); }
+    .btn { display:inline-flex; align-items:center; gap:.5rem; padding:.5rem 1rem; border-radius: .75rem; font-weight: 500; transition: .15s; border:1px solid; }
+    .btn-primary { border-color: rgba(34,211,238,.3); background: rgba(6,182,212,.12); color: #cffafe; }
+    .btn-primary:hover { background: rgba(6,182,212,.22); border-color: rgba(103,232,249,.45); box-shadow: 0 10px 30px rgba(56,189,248,.15); }
+    .btn-ghost { border-color: rgba(255,255,255,.12); color: rgba(255,255,255,.75); }
+    .btn-ghost:hover { background: rgba(255,255,255,.06); }
+    .input { width:100%; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); border-radius:.75rem; padding:.5rem .75rem; color:#fff; outline:none; }
+    .input::placeholder { color: rgba(255,255,255,.4); }
+    .input:focus { border-color: rgba(34,211,238,.4); }
+    .kpi-card { padding:1.25rem; }
+    .tag { display:inline-flex; align-items:center; border-radius:.5rem; border:1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.06); padding:.25rem .625rem; font-size:.75rem; color: rgba(255,255,255,.75); }
+    .dot { width:.5rem; height:.5rem; border-radius:999px; }
+  </style>
+</head>
+<body class="min-h-screen bg-base-900 text-white relative overflow-x-hidden selection:bg-cyan-500/30 selection:text-white">
+  <div class="pointer-events-none fixed inset-0">
+    <video class="absolute inset-0 w-full h-full object-cover opacity-20" autoplay muted loop playsinline>
+      <source src="./bg-anime.mp4" type="video/mp4" />
+    </video>
+    <div class="absolute -top-40 -left-40 w-[50rem] h-[50rem] bg-cyan-500/10 blur-[120px] rounded-full"></div>
+    <div class="absolute -bottom-40 -right-40 w-[50rem] h-[50rem] bg-fuchsia-500/10 blur-[120px] rounded-full"></div>
+  </div>
+
+  <div class="relative">
+    <header class="sticky top-0 z-30 backdrop-blur-xs bg-base-900/70 border-b border-white/10">
+      <div class="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400/30 to-fuchsia-400/30 border border-white/15 grid place-items-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M12 3l9 5-9 5-9-5 9-5z" stroke="currentColor" class="text-cyan-300" stroke-width="1.5"/>
+              <path d="M21 12l-9 5-9-5" stroke="currentColor" class="text-fuchsia-300/80" stroke-width="1.5"/>
+              <path d="M12 22V13" stroke="currentColor" class="text-white/70" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-sm text-white/60">Control Panel</div>
+            <div class="text-xl font-semibold grad-text">Bot Monitor • NX</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="toggleAnon" class="btn-ghost">🙈 Скрыть баланс</button>
+          <button id="toggleList" class="btn-ghost">Список ботов</button>
+          <a class="btn-primary" href="#" onclick="location.reload()">Обновить</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-6 py-8">
+      <div id="app-root"></div>
+    </main>
+
+    <footer class="mx-auto max-w-7xl px-6 py-10 text-center text-xs text-white/40">
+      © <span id="year"></span> cyclel1ves • vNX
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useEffect, useState } = React;
+
+    function maskBalance(num, anon) {
+      const n = Number(num || 0);
+      if (!anon) return n.toLocaleString('ru-RU');
+      const s = String(Math.floor(n));
+      if (s.length <= 2) return '••';
+      return s.slice(0, 2) + '•'.repeat(Math.max(0, s.length - 2));
+    }
+
+    function KPI({ title, value, sub }) {
+      return (
+        <div className="panel kpi-card">
+          <div className="text-white/60 text-xs">{title}</div>
+          <div className="mt-1 text-2xl font-semibold">{value}</div>
+          {sub && <div className="mt-2 text-xs text-white/50">{sub}</div>}
+        </div>
+      );
+    }
+
+    function BotCard({ b, anon }) {
+      const extras = Object.entries(b)
+	.filter(([k, v]) =>
+        !['username','balance','vpsId','status','logs'].includes(k) &&
+	v != null && v !== ''
+	)
+	.map(([k, v]) => [k === 'an' ? '/an' : k, v])
+        .slice(0, 4);
+      return (
+        <div className="panel p-4 hover:border-cyan-400/30 transition">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-white/80 font-medium truncate max-w-[14rem]">{b.username || '—'}</span>
+                {b.status && <span className="tag">{b.status}</span>}
+              </div>
+              <div className="text-xs text-white/50 mt-1">VPS: {b.vpsId ?? '—'}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm text-white/60">Баланс</div>
+              <div className="text-lg font-semibold">{maskBalance(b.balance, anon)}</div>
+            </div>
+          </div>
+          {extras.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {extras.map(([k, v]) => (
+                <span key={k} className="tag">{k}: {String(v ?? '—')}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function App() {
+      const [bots, setBots] = useState([]);
+      const [total, setTotal] = useState({ bots: 0, vps: 0, balance: 0 });
+      const [approvals, setApprovals] = useState([]);
+      const [anon, setAnon] = useState(true);
+      const [showList, setShowList] = useState(true);
+
+      const [startName, setStartName] = useState('');
+      const [trAn, setTrAn] = useState('');
+      const [trNick, setTrNick] = useState('');
+      const [trAmount, setTrAmount] = useState('');
+
+      async function loadAgents() {
+        try {
+          const res = await fetch('/api/agents');
+          const agents = await res.json();
+          let list = [];
+          let vpsSet = new Set();
+          let bal = 0;
+          agents.forEach(a => {
+            if (a?.vpsId) vpsSet.add(a.vpsId);
+            const botsArr = a?.bots?.bots || [];
+            bal += Number(a?.bots?.totalBalance || 0);
+            botsArr.forEach(b => {
+              list.push({
+                username: b.username ?? b.user ?? b.name ?? '',
+                balance: b.balance ?? b.bal ?? 0,
+                vpsId: a.vpsId ?? a.name ?? '—',
+                status: b.status ?? b.state ?? '',
+                ...b
+              });
+            });
+          });
+          setBots(list);
+          setTotal({ bots: list.length, vps: vpsSet.size, balance: bal });
+        } catch (e) {
+          console.error('agents failed', e);
+        }
+      }
+
+      async function loadApprovals() {
+        try {
+          const res = await fetch('/api/approvals');
+          const list = await res.json();
+          setApprovals(Array.isArray(list) ? list : []);
+        } catch (e) {
+          console.error('approvals failed', e);
+        }
+      }
+
+      useEffect(() => {
+        loadAgents(); loadApprovals();
+        const id = setInterval(() => { loadAgents(); loadApprovals(); }, 5000);
+        return () => clearInterval(id);
+      }, []);
+
+      useEffect(() => {
+        document.getElementById('year').textContent = new Date().getFullYear();
+        const btnAnon = document.getElementById('toggleAnon');
+        const btnList = document.getElementById('toggleList');
+        btnAnon.onclick = () => setAnon(x => !x);
+        btnList.onclick = () => setShowList(x => !x);
+      }, []);
+
+      async function startBot() {
+        const name = startName.trim();
+        if (!name) return;
+        try {
+          await fetch('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: name })
+          });
+          setStartName('');
+          loadAgents();
+        } catch (e) {
+          alert('Не удалось запустить бота');
+        }
+      }
+
+      async function sendTransfer() {
+        const an = trAn.trim();
+        const recipient = trNick.trim();
+        const amount = parseInt(trAmount, 10);
+        if (!(an && recipient && amount)) return;
+        try {
+          const res = await fetch('/api/transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ an, recipient, amount })
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || 'Transfer failed');
+          setTrAn(''); setTrNick(''); setTrAmount('');
+          alert('Перевод запланирован');
+        } catch (e) {
+          alert(e.message || 'Ошибка перевода');
+        }
+      }
+
+      async function approve(id) {
+        try {
+          await fetch('/api/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+          });
+          loadApprovals();
+        } catch (e) {
+          alert('Не удалось одобрить');
+        }
+      }
+
+      return (
+        <div className="space-y-8">
+          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KPI title="Всего ботов" value={total.bots.toLocaleString('ru-RU')} />
+            <KPI title="Суммарный баланс" value={maskBalance(total.balance, anon)} sub={anon ? "баланс скрыт" : "показывается полностью"} />
+            <KPI title="Серверов (VPS)" value={total.vps.toLocaleString('ru-RU')} />
+            <KPI title="Запросов на одобрение" value={approvals.length} />
+          </section>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <section className="lg:col-span-2 space-y-4">
+              <div className="panel p-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Боты</h2>
+                  <div className="text-sm text-white/60">{bots.length} шт.</div>
+                </div>
+                {showList ? (
+                  <div className="mt-4 grid gap-3">
+                    {bots.length === 0 && <div className="text-sm text-white/50 text-center py-8">Пока пусто…</div>}
+                    {bots.map((b, i) => <BotCard key={i} b={b} anon={anon} />)}
+                  </div>
+                ) : (
+                  <div className="text-sm text-white/50 py-6 text-center">Список скрыт</div>
+                )}
+              </div>
+            </section>
+
+            <aside className="space-y-4">
+              <div className="panel p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Запустить бота</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <input className="input" placeholder="Username" value={startName} onChange={e=>setStartName(e.target.value)} />
+                  <button className="btn-primary justify-center" onClick={startBot}>Запустить</button>
+                </div>
+              </div>
+
+              <div className="panel p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Перевод средств</h3>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  <input className="input" placeholder="Где (/an)" value={trAn} onChange={e=>setTrAn(e.target.value)} />
+                  <input className="input" placeholder="Кому (ник)" value={trNick} onChange={e=>setTrNick(e.target.value)} />
+                  <input className="input" placeholder="Сумма" inputMode="numeric" value={trAmount} onChange={e=>setTrAmount(e.target.value)} />
+                  <button className="btn-primary justify-center" onClick={sendTransfer}>Отправить</button>
+                </div>
+              </div>
+
+              <div className="panel p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold">Запросы на одобрение</h3>
+                  <span className="tag">{approvals.length}</span>
+                </div>
+                <div className="grid gap-2">
+                  {approvals.length === 0 && <div className="text-sm text-white/50 text-center py-4">Нет новых запросов</div>}
+                  {approvals.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 bg-white/5 rounded-xl border border-white/10 p-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-white/80 truncate">{a.username ?? a.user ?? a.nick ?? '—'}</div>
+                        <div className="text-xs text-white/50 mt-0.5">{a.id ? `#${a.id}` : ''}</div>
+                      </div>
+                      <button className="btn-primary" onClick={()=>approve(a.id)}>Одобрить</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('app-root')).render(<App/>);
+    document.getElementById('year').textContent = new Date().getFullYear();
+    (function bindToggles(){
+    })();
+  </script>
+</body>
+</html>
