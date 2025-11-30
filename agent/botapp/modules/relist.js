@@ -1,6 +1,5 @@
 ﻿const { logInfo, logWarn } = require('./logging');
 const { targetItems } = require('./items');
-const { autoSell } = require('./ahParseBuy');
 const { waitForWindowOpen, closeWindow, delay } = require('./utils');
 const { loadListedItems } = require('./listedItemsStore');
 const { chooseRandomAN, connectToAN, AN_LIST } = require('./anManager');
@@ -22,6 +21,8 @@ async function checkMyLotsAndRelistIfNeeded(bot) {
         return;
     }
 
+	const { autoSell } = require('./ahParseBuy');
+	
     const uniqueANs = [...new Set(listed.map(item => item.anNumber))];
 
     for (const an of uniqueANs) {
