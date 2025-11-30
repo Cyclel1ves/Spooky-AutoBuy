@@ -1,4 +1,6 @@
 ﻿const { logInfo, logWarn } = require('./logging');
+const { targetItems } = require('./items');
+const { autoSell } = require('./ahParseBuy');
 const { waitForWindowOpen, closeWindow, delay } = require('./utils');
 const { loadListedItems } = require('./listedItemsStore');
 const { chooseRandomAN, connectToAN, AN_LIST } = require('./anManager');
@@ -48,8 +50,14 @@ async function checkMyLotsAndRelistIfNeeded(bot) {
         }
 
         await delay(500);
-        await bot.clickWindow(52, 0, 0);
-        await delay(500);
+
+	    for (let i = 0; i < 3; i++) {
+    	    await bot.clickWindow(0, 0, 0);
+            await delay(300);
+	    }
+
+	    await autoSell(bot, targetItems);
+
         closeWindow(bot);
 
         logInfo(`[Relist] Завершено перевыставление на ${an}`, 'auction');
