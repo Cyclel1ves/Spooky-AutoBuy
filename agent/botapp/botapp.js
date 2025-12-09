@@ -178,7 +178,9 @@ async function createMainBot(username, isPriceUpdater, skipApproval = false) {
         username,
         version: config.bot.version
     });
-
+    
+    mainBot.password = config.bot.password;
+    
     attachVanillaMimic(mainBot);
 
     mainBot.customUsername = username;
