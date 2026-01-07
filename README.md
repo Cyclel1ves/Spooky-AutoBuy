@@ -92,12 +92,12 @@
 ## Запуск
 1. **Контроллер** (на сервере с публичным IP):
    ```bash
-   PORT=4000 BARE_API_KEY=your_key node controller/index.js
+   node controller/index.js
    ```
-2. **Web UI** автоматически доступен по `http://<host>:<PORT>/`.
-3. **Агент** (на каждой VPS; лучше заранее прописать ник в `agent/botapp/botname.txt`):
+2. **Web UI** автоматически доступен по `http://<host>:<PORT>/`(дефолт `http://localhost:4000/`).
+3. **Агент** (на каждой VPS; лучше заранее прописать ник в `agent/botapp/botname.txt` и изменить пароль `agent/botapp/config.js`):
    ```bash
-   VPS_ID=vps-01 CTRL_URL=wss://controller.example.com BOT_PASSWORD=secret node agent/index.js
+   node agent/index.js
    ```
 4. После запуска агент запросит approve. Зайдите в Web UI (или вызовите `POST /api/approve`) и подтвердите машину. После попадания в whitelist агент будет перезапускать botapp автоматически.
 5. Для нескольких агентов нужны отдельные папки проекта либо запуск через изолированные окружения для разделения чувствительных данных.
@@ -143,3 +143,4 @@
 - **Не обновляется priceStore.** Убедитесь, что хотя бы один агент получил роль updater (лог `[IO] role for ... -> updater-a`). 
 - **Переводы не выполняются.** Проверьте, что у выбранных ботов достаточно средств; при нехватке `planTransfer` вернёт *insufficient funds*.
 - **Капча не решается.** Посмотрите логи `[captcha]` на контроллере и обновите `BARE_API_KEY`.
+
