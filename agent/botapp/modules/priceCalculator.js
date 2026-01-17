@@ -1,4 +1,5 @@
 
+const { normalizePrice } = require('./priceUtils');
 
 function solvePowerLaw(p1, y1, p2, y2) {
     const n = Math.log(y2 / y1) / Math.log(p2 / p1);
@@ -10,10 +11,12 @@ function solvePowerLaw(p1, y1, p2, y2) {
 function computeSimplePrice(lots, historicalPrice) {
     if (!lots || lots.length === 0) {
         const fallback = historicalPrice || 0;
+        const rawBuy = fallback * 0.75;
+        const rawSell = fallback * 0.80;
         return {
             absolutePrice: fallback,
-            buyPrice: Math.floor(fallback * 0.75),
-            sellPrice: Math.floor(fallback * 0.80)
+            buyPrice: normalizePrice(rawBuy),
+            sellPrice: normalizePrice(rawSell)
         };
     }
 
@@ -41,8 +44,11 @@ function computeSimplePrice(lots, historicalPrice) {
         margin = 0.03;
     }
 
-    const buyPrice = Math.floor(newPrice * (1 - margin));
-    const sellPrice = Math.floor(newPrice * (1 - margin));
+    const rawBuy = newPrice * (1 - margin);
+    const rawSell = newPrice * (1 - margin);
+
+    const buyPrice = normalizePrice(rawBuy);
+    const sellPrice = normalizePrice(rawSell);
 
     return {
         absolutePrice: newPrice,
