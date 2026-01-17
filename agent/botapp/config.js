@@ -12,7 +12,7 @@ module.exports = {
         pageDelay: 300,
         maxPages: 5,
         helperCheckDelay: 1000,
-        minTimeLeft: 32401
+        minTimeLeft: 32390
     },
     bot: {
         host: 'SpookyTime.net',
