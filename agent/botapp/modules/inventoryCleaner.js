@@ -109,9 +109,17 @@ function getItemLore(item) {
 
 
 function hasExpLvl(nbt) {
-    if (!nbt || !nbt.value) return false;
-    return Object.prototype.hasOwnProperty.call(nbt.value, 'exp-lvl');
+  if (!nbt || !nbt.value) return false;
+
+  if (Object.prototype.hasOwnProperty.call(nbt.value, 'exp-lvl')) return true;
+
+  const pbv = nbt.value.PublicBukkitValues;
+  const pbvObj = pbv && (pbv.value || pbv);
+  if (pbvObj && pbvObj['spookystash:levels'] != null) return true;
+
+  return getExpLvlFromLore(nbt) !== null;
 }
+
 
 
 function getExpLvlFromLore(nbt) {
