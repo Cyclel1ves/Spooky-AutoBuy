@@ -984,9 +984,19 @@ function checkNbtRequirements(nbt, nbtReq) {
 
 
 function hasExpLvl(nbt) {
-    if (!nbt || !nbt.value) return false;
-    return Object.prototype.hasOwnProperty.call(nbt.value, 'exp-lvl');
+  if (!nbt || !nbt.value) return false;
+
+  if (Object.prototype.hasOwnProperty.call(nbt.value, 'exp-lvl')) return true;
+
+  const pbv = nbt.value.PublicBukkitValues;
+  const pbvObj = pbv && (pbv.value || pbv);
+  if (pbvObj && pbvObj['spookystash:levels'] != null) return true;
+
+  const loreArray = getLoreFromNbt(nbt);
+  const combinedLore = loreArray.map(line => extractPlainText(line)).join(' ');
+  return /(?:Уровень:|Содержит:\s*)(\d+)/i.test(combinedLore);
 }
+
 
 
 function areItemsEqual(oldItems, newItems) {
