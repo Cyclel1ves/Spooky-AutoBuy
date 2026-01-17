@@ -1,4 +1,4 @@
-const MIN_SAFE = 1e8;
+const MIN_SAFE = 10000;
 
 function collectCandidates(agentsMap) {
     const arr = [];
