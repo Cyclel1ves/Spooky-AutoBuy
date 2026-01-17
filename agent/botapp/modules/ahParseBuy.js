@@ -369,7 +369,11 @@ async function autoSell(bot, targetItems) {
 
             const matchedTarget = getInventoryMatchedTarget(item, targetItems);
             if (!matchedTarget) continue;
-
+            const freshSell = getHistoricalSellPrice(matchedTarget.displayName);
+            if (typeof freshSell === 'number' && freshSell > 0) {
+                matchedTarget.sellPrice = freshSell;
+            }
+            
             const count = item.count;
             const unitPrice = matchedTarget.sellPrice || 1;
             const totalPriceRaw = unitPrice * count;
