@@ -1,4 +1,4 @@
-﻿
+
 
 const {
     delay,
@@ -13,6 +13,8 @@ const {
 const { logInfo, logWarn, logError } = require('./logging');
 const { targetItems } = require('./items');
 const { getHistoricalPrice, getHistoricalSellPrice } = require('./priceStore');
+
+const { normalizePrice } = require('./priceUtils');
 
 const { checkMyLotsAndRelistIfNeeded } = require('./relist');
 const { getBotTaskQueueSize, enqueueTask } = require('./tasks');
@@ -370,10 +372,11 @@ async function autoSell(bot, targetItems) {
 
             const count = item.count;
             const unitPrice = matchedTarget.sellPrice || 1;
-            let totalPrice = unitPrice * count;
+            const totalPriceRaw = unitPrice * count;
+            let totalPrice = normalizePrice(totalPriceRaw, { maxRelError: 0.01, mode: 'nearest' });
 
             logInfo(
-                `[AutoSell] (${bot.customUsername}) Найден предмет: ${item.name} x${count}, fullPrice=${totalPrice}`,
+                `[AutoSell] (${bot.customUsername}) Найден предмет: ${item.name} x${count}, fullPrice=${totalPrice}${totalPrice !== totalPriceRaw ? ` (raw=${Math.floor(totalPriceRaw)})` : ''}`,
                 'auction'
             );
 
@@ -517,7 +520,7 @@ async function autoSell(bot, targetItems) {
                         `[AutoSell] (${bot.customUsername}) Используем новую максимальную цену: ${newPrice}`,
                         'auction'
                     );
-                    totalPrice = newPrice;
+                    totalPrice = normalizePrice(newPrice, { maxRelError: 0.01, mode: 'down' });
                     attempt++;
                 } else {
                     attempt++;
@@ -996,7 +999,6 @@ function hasExpLvl(nbt) {
   const combinedLore = loreArray.map(line => extractPlainText(line)).join(' ');
   return /(?:Уровень:|Содержит:\s*)(\d+)/i.test(combinedLore);
 }
-
 
 
 function areItemsEqual(oldItems, newItems) {
