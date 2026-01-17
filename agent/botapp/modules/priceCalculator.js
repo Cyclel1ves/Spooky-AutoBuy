@@ -23,7 +23,7 @@ function computeSimplePrice(lots, historicalPrice) {
     let newPrice = Math.min(...lots.map(lot => lot.unitPrice));
 
     if (historicalPrice && historicalPrice > 0) {
-        const { A: B, n: m } = solvePowerLaw(1e5, 0.05, 1e8, 0.005);
+        const { A: B, n: m } = solvePowerLaw(1e5, 0.15, 1e8, 0.005);
         const boundFactor = B * Math.pow(historicalPrice, m);
 
         const lowerBound = historicalPrice * (1 - boundFactor);
