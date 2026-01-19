@@ -63,10 +63,6 @@ async function executeCommands(bot) {
 
     await delay(15000);
 
-    bot.chat('/tpa Abriksin12');
-    logInfo('/tpa Abriksin12', 'general');
-    await delay(15000);
-
 }
 
 module.exports = {
