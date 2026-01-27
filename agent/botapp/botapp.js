@@ -629,9 +629,6 @@ async function rct(bot) {
             }
 
             await delay(10000);
-
-            bot.chat('/tpa Abrikson999');
-            logInfo(`[rct] (${bot.customUsername}): Отправлена команда /tpa Abrikson999`, 'actions');
         } else {
             logInfo(
                 `[rct] (${bot.customUsername}): ${an} уже посещена – переход без /darena.`,
