@@ -28,55 +28,375 @@ const { hasVisited, markVisited } = require('./modules/visitedAN');
 const { mergeSnapshot } = require('./modules/priceStore');
 let scheduleTransfers;
 
+const PI = Math.PI;
+const TO_DEG = 180 / PI;
+const movementPackets = new Set([
+    'position',
+    'position_look',
+    'look',
+    'flying',
+    'teleport_confirm'
+]);
+const viewDistanceBits = {
+    far: 12,
+    normal: 10,
+    short: 8,
+    tiny: 6
+};
+
+function toNotchianYaw(yawRadians) {
+    return Math.fround(180 - (yawRadians * TO_DEG));
+}
+
+function toNotchianPitch(pitchRadians) {
+    return Math.fround(-(pitchRadians * TO_DEG));
+}
+
+function isBrandPacket(name, params) {
+    return name === 'custom_payload' && params?.channel === 'minecraft:brand';
+}
+
+function getPacketViewDistance(viewDistance) {
+    if (typeof viewDistance === 'number' && Number.isFinite(viewDistance) && viewDistance > 0) {
+        return viewDistance;
+    }
+
+    return viewDistanceBits[viewDistance] ?? 32;
+}
+
+function getCompatOptions() {
+    const botConfig = config?.bot ?? {};
+    const viewDistance = botConfig.viewDistance ?? 32;
+    return {
+        brand: botConfig.brand ?? 'vanilla',
+        locale: botConfig.locale ?? 'ru_ru',
+        viewDistance,
+        packetViewDistance: getPacketViewDistance(viewDistance),
+        enableTextFiltering: botConfig.enableTextFiltering ?? false,
+        enableServerListing: botConfig.enableServerListing ?? true,
+        checkTimeoutInterval: botConfig.checkTimeoutInterval ?? 120_000,
+        physicsEnabled: botConfig.physicsEnabled ?? true,
+        mimicEnabled: botConfig.mimicEnabled ?? true,
+        initialTeleportSpoofEnabled: botConfig.initialTeleportSpoofEnabled ?? true,
+        initialSpoofGroundY: botConfig.initialSpoofGroundY ?? 65,
+        initialSpoofOffsetX: botConfig.initialSpoofOffsetX ?? 1,
+        initialSpoofOffsetZ: botConfig.initialSpoofOffsetZ ?? 1,
+        earlySwingEnabled: botConfig.earlySwingEnabled ?? true,
+        mountMimicEnabled: botConfig.mountMimicEnabled ?? true,
+        resendSettingsOnSync: botConfig.resendSettingsOnSync ?? true,
+        mountTickMs: botConfig.mountTickMs ?? 50
+    };
+}
+
+function getBrandChannelName(bot) {
+    if (bot.supportFeature('customChannelMCPrefixed')) return 'MC|Brand';
+    if (bot.supportFeature('customChannelIdentifier')) return 'minecraft:brand';
+    throw new Error('Unsupported brand channel name');
+}
+
 function attachVanillaMimic(bot) {
-    if (bot.mimic) return;
+    if (bot.mimic?.__compatAttached) return bot.mimic;
 
-    const state = { timeouts: [], flyingTicker: null, active: false };
+    const compat = getCompatOptions();
+    const state = {
+        settingsSent: false,
+        queuedBrandPacket: null,
+        firstServerTeleport: null,
+        queuedTeleportConfirm: null,
+        suppressMovementUntilSpoofComplete: false,
+        initialTeleportSpoofScheduled: false,
+        initialTeleportSpoofDone: !compat.initialTeleportSpoofEnabled,
+        earlySwingScheduled: false,
+        settingsReplaySent: false,
+        loginCount: 0,
+        mountTicker: null,
+        serverAnimationCount: 0,
+        manualMimicEnabled: compat.mimicEnabled
+    };
 
-    function stop() {
-        for (const t of state.timeouts) clearTimeout(t);
-        state.timeouts.length = 0;
-        if (state.flyingTicker) { clearInterval(state.flyingTicker); state.flyingTicker = null; }
-        state.active = false;
+    const rawWrite = bot._client.write.bind(bot._client);
+    const brandChannel = getBrandChannelName(bot);
+
+    function applyBotSettings() {
+        if (!bot.settings) return;
+        bot.settings.locale = compat.locale;
+        bot.settings.viewDistance = compat.viewDistance;
+        bot.settings.enableTextFiltering = compat.enableTextFiltering;
+        bot.settings.enableServerListing = compat.enableServerListing;
     }
 
-    function schedule(fn, delay) {
-        const t = setTimeout(() => {
-            const idx = state.timeouts.indexOf(t);
-            if (idx !== -1) state.timeouts.splice(idx, 1);
-            try { fn(); } catch {}
-        }, delay);
-        state.timeouts.push(t);
+    function writeActual(name, params) {
+        return rawWrite(name, params);
     }
 
-    function sendArm(hand) {
-        if (!bot?._client || bot._client.ended) return;
-        try { bot._client.write('arm_animation', { hand }); } catch {}
+    function sendBrandPacket() {
+        if (bot._client.ended) return;
+        try {
+            bot._client.writeChannel(brandChannel, compat.brand);
+        } catch (err) {
+            logWarn(`[Compat] ${bot.customUsername}: brand resend failed: ${err.message}`, 'general');
+        }
     }
 
-    function sendFlying() {
-        if (!bot?._client || bot._client.ended) return;
-        const onGround = !!bot.entity?.onGround;
-        try { bot._client.write('flying', { onGround }); } catch {}
+    function stopMountMimic() {
+        if (state.mountTicker !== null) {
+            clearInterval(state.mountTicker);
+            state.mountTicker = null;
+        }
+    }
+
+    function startMountMimic() {
+        if (!state.manualMimicEnabled || !compat.mountMimicEnabled || state.mountTicker !== null) return;
+
+        const tick = () => {
+            if (bot._client.ended || !bot.vehicle) {
+                stopMountMimic();
+                return;
+            }
+
+            const yaw = Number.isFinite(bot.entity?.yaw) ? toNotchianYaw(bot.entity.yaw) : 0;
+            const pitch = Number.isFinite(bot.entity?.pitch) ? toNotchianPitch(bot.entity.pitch) : 0;
+            const onGround = !!bot.entity?.onGround;
+
+            try {
+                writeActual('look', { yaw, pitch, onGround });
+                writeActual('steer_vehicle', { sideways: 0, forward: 0, jump: 0 });
+            } catch (err) {
+                logWarn(`[Compat] ${bot.customUsername}: mount mimic failed: ${err.message}`, 'general');
+                stopMountMimic();
+            }
+        };
+
+        state.mountTicker = setInterval(tick, compat.mountTickMs);
+        tick();
+    }
+
+    function scheduleEarlySwing() {
+        if (!state.manualMimicEnabled || !compat.earlySwingEnabled || state.earlySwingScheduled || bot._client.ended) return;
+        state.earlySwingScheduled = true;
+
+        const send = (hand, delay) => {
+            setTimeout(() => {
+                if (bot._client.ended) return;
+                try {
+                    writeActual('arm_animation', { hand });
+                } catch {}
+            }, delay);
+        };
+
+        send(0, 40);
+        send(1, 80);
+    }
+
+    function replaySettingsAndBrand() {
+        if (
+            !compat.resendSettingsOnSync ||
+            state.settingsReplaySent ||
+            bot._client.ended ||
+            state.loginCount > 1
+        ) {
+            return;
+        }
+
+        state.settingsReplaySent = true;
+        setTimeout(() => {
+            if (bot._client.ended) return;
+            try {
+                bot.setSettings({
+                    locale: compat.locale,
+                    viewDistance: compat.viewDistance,
+                    enableTextFiltering: compat.enableTextFiltering,
+                    enableServerListing: compat.enableServerListing
+                });
+                sendBrandPacket();
+            } catch (err) {
+                logWarn(`[Compat] ${bot.customUsername}: settings replay failed: ${err.message}`, 'general');
+            }
+        }, 10);
+    }
+
+    function scheduleInitialTeleportSpoof() {
+        if (
+            !state.manualMimicEnabled ||
+            !compat.initialTeleportSpoofEnabled ||
+            state.initialTeleportSpoofScheduled ||
+            state.initialTeleportSpoofDone ||
+            !state.firstServerTeleport ||
+            !state.queuedTeleportConfirm
+        ) {
+            return;
+        }
+
+        state.initialTeleportSpoofScheduled = true;
+        setTimeout(runInitialTeleportSpoof, 5);
+    }
+
+    function runInitialTeleportSpoof() {
+        const actual = state.firstServerTeleport;
+        const confirm = state.queuedTeleportConfirm;
+
+        if (!actual || !confirm || bot._client.ended) {
+            state.suppressMovementUntilSpoofComplete = false;
+            state.initialTeleportSpoofScheduled = false;
+            return;
+        }
+
+        const spoof = {
+            x: actual.x + compat.initialSpoofOffsetX,
+            y: compat.initialSpoofGroundY,
+            z: actual.z + compat.initialSpoofOffsetZ,
+            yaw: -180,
+            pitch: 0,
+            onGround: false
+        };
+
+        const fallOffsets = [
+            0.0784000015258789,
+            0.23363200604248047,
+            0.4641593749554364,
+            0.76847620241298
+        ];
+
+        try {
+            writeActual('position_look', spoof);
+            for (const offset of fallOffsets) {
+                writeActual('position', {
+                    x: spoof.x,
+                    y: compat.initialSpoofGroundY - offset,
+                    z: spoof.z,
+                    onGround: false
+                });
+            }
+
+            writeActual('teleport_confirm', confirm);
+            writeActual('position_look', {
+                x: actual.x,
+                y: actual.y,
+                z: actual.z,
+                yaw: actual.yaw,
+                pitch: actual.pitch,
+                onGround: false
+            });
+            writeActual('position_look', {
+                x: actual.x,
+                y: actual.y,
+                z: actual.z,
+                yaw: actual.yaw,
+                pitch: actual.pitch,
+                onGround: false
+            });
+        } catch (err) {
+            logWarn(`[Compat] ${bot.customUsername}: initial teleport spoof failed: ${err.message}`, 'general');
+        } finally {
+            state.queuedTeleportConfirm = null;
+            state.suppressMovementUntilSpoofComplete = false;
+            state.initialTeleportSpoofScheduled = false;
+            state.initialTeleportSpoofDone = true;
+        }
     }
 
     function start() {
-        if (state.active) return;
-        stop();
-        state.active = true;
-
-        const jitter = Math.floor(Math.random() * 30);
-        schedule(() => sendArm(0), 280 + jitter);
-        schedule(() => sendArm(1), 320 + jitter);
-        schedule(sendFlying, 420 + jitter);
-        schedule(sendFlying, 480 + jitter);
-        schedule(sendFlying, 540 + jitter);
-
-        const flyingInterval = 760 + Math.floor(Math.random() * 80);
-        state.flyingTicker = setInterval(sendFlying, flyingInterval);
+        state.manualMimicEnabled = true;
     }
 
-    bot.mimic = { start, stop };
+    function stop() {
+        state.manualMimicEnabled = false;
+        stopMountMimic();
+    }
+
+    applyBotSettings();
+
+    bot._client.write = (name, params) => {
+        if (name === 'settings' && params) {
+            params.locale = compat.locale;
+            params.viewDistance = compat.packetViewDistance;
+            params.enableTextFiltering = compat.enableTextFiltering;
+            params.enableServerListing = compat.enableServerListing;
+        }
+
+        if (isBrandPacket(name, params) && !state.settingsSent) {
+            state.queuedBrandPacket = params;
+            return;
+        }
+
+        if (!state.initialTeleportSpoofDone && name === 'held_item_slot' && params?.slotId === 0) {
+            return;
+        }
+
+        if (name === 'settings' && !state.settingsSent) {
+            state.settingsSent = true;
+            const result = writeActual(name, params);
+            if (state.queuedBrandPacket) {
+                const packet = state.queuedBrandPacket;
+                state.queuedBrandPacket = null;
+                writeActual('custom_payload', packet);
+            }
+            return result;
+        }
+
+        if (state.suppressMovementUntilSpoofComplete && !state.initialTeleportSpoofDone) {
+            if (
+                name === 'teleport_confirm' &&
+                params?.teleportId === state.firstServerTeleport?.teleportId
+            ) {
+                state.queuedTeleportConfirm = params;
+                scheduleInitialTeleportSpoof();
+                return;
+            }
+
+            if (movementPackets.has(name)) {
+                return;
+            }
+        }
+
+        return writeActual(name, params);
+    };
+
+    bot._client.on('packet', (data, meta) => {
+        if (
+            meta.name === 'position' &&
+            !state.firstServerTeleport &&
+            state.manualMimicEnabled &&
+            compat.initialTeleportSpoofEnabled &&
+            typeof data?.teleportId !== 'undefined'
+        ) {
+            state.firstServerTeleport = {
+                x: data.x,
+                y: data.y,
+                z: data.z,
+                yaw: data.yaw,
+                pitch: data.pitch,
+                teleportId: data.teleportId
+            };
+            state.suppressMovementUntilSpoofComplete = true;
+        }
+
+        if (meta.name === 'animation') {
+            state.serverAnimationCount += 1;
+            if (state.serverAnimationCount === 2) scheduleEarlySwing();
+        }
+
+        if (meta.name === 'respawn' || meta.name === 'window_items') {
+            stopMountMimic();
+        }
+
+        if (meta.name === 'advancements' || meta.name === 'window_items') {
+            replaySettingsAndBrand();
+        }
+    });
+
+    bot.on('mount', startMountMimic);
+    bot.on('dismount', stopMountMimic);
+    bot.on('login', () => {
+        state.loginCount += 1;
+        if (state.loginCount > 1) stopMountMimic();
+        applyBotSettings();
+    });
+    bot.on('kicked', stop);
+    bot.on('end', stop);
+
+    bot.mimic = { start, stop, __compatAttached: true, __compatState: state };
+    return bot.mimic;
 }
 
 
@@ -172,11 +492,18 @@ async function createMainBot(username, isPriceUpdater, skipApproval = false) {
         if (!ok) throw new Error('User approval not given');
     }
 
+    const compat = getCompatOptions();
     const mainBot = mineflayer.createBot({
         host: config.bot.host,
         port: config.bot.port,
         username,
-        version: config.bot.version
+        version: config.bot.version,
+        brand: compat.brand,
+        viewDistance: compat.viewDistance,
+        enableTextFiltering: compat.enableTextFiltering,
+        enableServerListing: compat.enableServerListing,
+        checkTimeoutInterval: compat.checkTimeoutInterval,
+        physicsEnabled: compat.physicsEnabled
     });
     
     mainBot.password = config.bot.password;
@@ -264,16 +591,11 @@ function setupMainBotEvents(bot) {
     bot.on('chat', (_username, message) => {
         try { maybeStopMimicOnAuth(message); } catch {}
     });
+
     try { attachVanillaMimic(bot); } catch {}
     if (bot.__mimicEnabled === undefined) bot.__mimicEnabled = true;
     bot.on('login', () => setTimeout(() => { try { if (bot.__mimicEnabled) bot.mimic?.start(); } catch {} }, 200));
     bot.on('spawn', () => { try { if (bot.__mimicEnabled) bot.mimic?.start(); } catch {} });
-    bot.on('kicked', () => { try { bot.mimic?.stop(); } catch {} });
-    bot.on('end', () => { try { bot.mimic?.stop(); } catch {} });
-
-    try { attachVanillaMimic(bot); } catch {}
-    bot.on('login', () => setTimeout(() => { try { bot.mimic?.start(); } catch {} }, 200));
-    bot.on('spawn', () => { try { bot.mimic?.start(); } catch {} });
     bot.on('kicked', () => { try { bot.mimic?.stop(); } catch {} });
     bot.on('end', () => { try { bot.mimic?.stop(); } catch {} });
 
