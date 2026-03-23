@@ -12,7 +12,7 @@ const { executeCommands } = require('./modules/botCommands');
 const config = require('./config');
 const { delay } = require('./modules/utils');
 const { targetItems } = require('./modules/items');
-const { loadListedItems, saveListedItems } = require('./modules/listedItemsStore');
+const { findBestByPrice, matchOfflineAmount, removeOpenListing, loadOpenListings } = require('./modules/listedItemsStore');
 const { startMonitorLoop } = require('./modules/monitor');
 
 const {
@@ -706,47 +706,36 @@ function setupMainBotEvents(bot) {
         }
     });
 }
+function _parseMoneyFromText(text) {
+    const match = String(text || '').match(/\$([\d.,\s]+)/);
+    if (!match) return null;
+    const digits = String(match[1]).replace(/[^\d]/g, '');
+    if (!digits) return null;
+    const value = Number.parseInt(digits, 10);
+    return Number.isFinite(value) ? value : null;
+}
+
+function _parseItemTextFromSale(text) {
+    const match = String(text || '').match(/купили\s+(.+?)\s+за\s+\$/i);
+    return match ? String(match[1]).trim() : null;
+}
+
 function handleSingleSale(bot, text) {
-    const priceMatch = text.match(/\$(\d[\d,\.]*)/);
-    if (!priceMatch) {
-        logWarn(`[handleSingleSale] Не найдена сумма $ в сообщении: ${text}`, 'auction');
+    const soldPrice = _parseMoneyFromText(text);
+    if (!soldPrice) {
+        logWarn(`[handleSingleSale] Не найдена сумма продажи: ${text}`, 'auction');
         return;
     }
 
-    const rawPriceStr = priceMatch[1];
-    const cleanedStr = rawPriceStr.replace(/[^\d]/g, '');
-    const soldPrice = parseInt(cleanedStr, 10);
-    if (isNaN(soldPrice)) {
-        logWarn(`[handleSingleSale] Сумма $${rawPriceStr} не является числом`, 'auction');
-        return;
+    const itemText = _parseItemTextFromSale(text);
+    const best = findBestByPrice(bot.customUsername, soldPrice, itemText);
+    if (best && best.listingId) {
+        removeOpenListing(bot.customUsername, best.listingId);
+        bot.myListedItems = loadOpenListings(bot.customUsername);
+        logInfo(`[handleSingleSale] (${bot.customUsername}) Удалён лот listingId=${best.listingId}, $${soldPrice}`, 'auction');
+    } else {
+        logWarn(`[handleSingleSale] Не нашли локальный лот на сумму $${soldPrice}`, 'auction');
     }
-
-    const anNumber = bot.currentAN;
-    if (!anNumber) {
-        logWarn(`[handleSingleSale] Нет bot.currentAN, не можем удалить лот`, 'auction');
-        return;
-    }
-
-    const listed = loadListedItems(bot.customUsername);
-    if (!listed || listed.length === 0) {
-        return;
-    }
-
-    const idx = listed.findIndex(lot => lot.anNumber === anNumber && lot.price === soldPrice);
-
-    if (idx === -1) {
-        logWarn(
-            `[handleSingleSale] Не нашли лот an=${anNumber}, price=$${soldPrice} среди ${listed.length} записей`,
-            'auction'
-        );
-        return;
-    }
-
-    listed.splice(idx, 1);
-    saveListedItems(bot.customUsername, listed);
-    bot.myListedItems = listed;
-
-    logInfo(`[handleSingleSale] (${bot.customUsername}) Удалён лот an=${anNumber}, $${soldPrice}`, 'auction');
 
     bot.waitingForSaleBeforeBuy = false;
     enqueueTask(bot, async () => {
@@ -756,70 +745,19 @@ function handleSingleSale(bot, text) {
 }
 
 function handleOfflineSale(bot, text) {
-    const priceMatch = text.match(/\$(\d[\d,\.]*)/);
-    if (!priceMatch) {
-        logWarn(`[handleOfflineSale] Не найдена сумма в "${text}"`, 'auction');
+    const soldPrice = _parseMoneyFromText(text);
+    if (!soldPrice) {
+        logWarn(`[handleOfflineSale] Не найдена сумма продажи: ${text}`, 'auction');
         return;
     }
 
-    const rawPriceStr = priceMatch[1];
-    const cleanedStr = rawPriceStr.replace(/[^\d]/g, '');
-    const soldPrice = parseInt(cleanedStr, 10);
-    if (isNaN(soldPrice)) {
-        logWarn(`[handleOfflineSale] Сумма $${rawPriceStr} не число`, 'auction');
-        return;
+    const matched = matchOfflineAmount(bot.customUsername, soldPrice);
+    if (Array.isArray(matched) && matched.length > 0) {
+        bot.myListedItems = loadOpenListings(bot.customUsername);
+        logInfo(`[handleOfflineSale] (${bot.customUsername}) Удалено ${matched.length} лот(ов) на $${soldPrice}`, 'auction');
+    } else {
+        logWarn(`[handleOfflineSale] Не нашли комбинацию локальных лотов на сумму $${soldPrice}`, 'auction');
     }
-
-    const anNumber = bot.currentAN;
-    if (!anNumber) {
-        logWarn(`[handleOfflineSale] Нет bot.currentAN, не можем удалить лоты`, 'auction');
-        return;
-    }
-
-    let listed = loadListedItems(bot.customUsername);
-    if (!listed || listed.length === 0) {
-        logInfo(`[handleOfflineSale] Нечего удалять у бота ${bot.customUsername}`, 'auction');
-        return;
-    }
-
-    const relevantIndexes = [];
-    for (let i = 0; i < listed.length; i++) {
-        if (listed[i].anNumber === anNumber) {
-            relevantIndexes.push(i);
-        }
-    }
-    if (relevantIndexes.length === 0) {
-        logWarn(`[handleOfflineSale] Нет лотов an=${anNumber}`, 'auction');
-        return;
-    }
-
-    const subsetIndexes = findUpToThreeLots(listed, relevantIndexes, soldPrice);
-    if (subsetIndexes.length === 0) {
-        logWarn(
-            `[handleOfflineSale] Не нашли комбинацию 1..3 лотов an=${anNumber} на сумму $${soldPrice}`,
-            'auction'
-        );
-        return;
-    }
-
-    subsetIndexes.sort((a, b) => b - a);
-    for (const idx of subsetIndexes) {
-        listed.splice(idx, 1);
-    }
-
-    enqueueTask(bot, async () => {
-        saveListedItems(bot.customUsername, listed);
-        bot.myListedItems = listed;
-        logInfo(
-            `[handleOfflineSale] (${bot.customUsername}) Обновлён список лотов после удаления: ${JSON.stringify(listed)}`,
-            'auction'
-        );
-    });
-
-    logInfo(
-        `[handleOfflineSale] (${bot.customUsername}) Удалено ${subsetIndexes.length} лот(ов) an=${anNumber} на $${soldPrice}`,
-        'auction'
-    );
 
     bot.waitingForSaleBeforeBuy = false;
     enqueueTask(bot, async () => {
