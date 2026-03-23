@@ -1,5 +1,3 @@
-
-
 const {
     delay,
     closeWindow,
@@ -19,10 +17,14 @@ const { normalizePrice } = require('./priceUtils');
 const { checkMyLotsAndRelistIfNeeded } = require('./relist');
 const { getBotTaskQueueSize, enqueueTask } = require('./tasks');
 const { getInventoryMatchedTarget } = require('./inventoryCleaner');
-const { loadListedItems, saveListedItems } = require('./listedItemsStore');
-const { connectToSellAN, connectToAN, chooseRandomAN } = require('./anManager');
+const { upsertOpenListing, loadOpenListings } = require('./listedItemsStore');
+
 const { toList, toNumber } = require('./helpers/nbt');
 let currentBalance = null;
+
+function createListingId() {
+    return `lst_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 
 function startBalanceUpdater(bot) {
@@ -348,19 +350,7 @@ async function autoSell(bot, targetItems) {
 
         const inventoryItems = bot.inventory.items();
 
-        if (!bot.activeSellAN) {
-            const chosenAN = chooseRandomAN();
-            bot.activeSellAN = chosenAN;
-            logInfo(`[AutoSell] (${bot.customUsername}) Выбрана склад-анархия: ${chosenAN}`, 'auction');
-        }
-
-        const connected = await connectToAN(bot, bot.activeSellAN);
-        if (!connected) {
-            logWarn(`[AutoSell] (${bot.customUsername}) Не удалось подключиться к ${bot.activeSellAN} перед продажей`, 'auction');
-            return;
-        }
-
-
+        logInfo(`[AutoSell] (${bot.customUsername}) Используем общее хранилище: продаём на текущей анархии без переключения.`, 'auction');
 
         let stopSelling = false;
 
@@ -413,24 +403,26 @@ async function autoSell(bot, targetItems) {
                         const rawText = msg.toString();
                         const text = rawText.replace(/\u00A7./g, '').toLowerCase();
 
-                        if (text.includes('вы успешно продали') || text.includes('выставлен на продажу')) {
+                        if (text.includes('выставлен на продажу') || (text.includes('выставили') && text.includes('на продажу'))) {
                             logInfo(
                                 `[AutoSell] (${bot.customUsername}) Продажа подтверждена: ${text}`,
                                 'auction'
                             );
-                            if (!bot.myListedItems) {
-                                bot.myListedItems = [];
-                            }
-                            logInfo(`[AutoSell] (${bot.customUsername}) bot.currentAN = ${bot.currentAN}`, 'auction');
-                            const listedLot = {
-                                anNumber: bot.activeSellAN ? bot.activeSellAN : 'unknown',
-                                price: totalPrice,
-                                count: count,
-                                timestamp: Date.now()
-                            };
-                            bot.myListedItems.push(listedLot);
 
-                            saveListedItems(bot.customUsername, bot.myListedItems);
+                            const listingId = createListingId();
+                            upsertOpenListing(bot.customUsername, {
+                                listingId,
+                                itemName: item.name,
+                                displayName: matchedTarget.displayName || item.name,
+                                totalPrice: totalPrice,
+                                count: count,
+                                listedAt: Date.now()
+                            });
+                            bot.myListedItems = loadOpenListings(bot.customUsername);
+
+                            if (bot.waitingForSaleBeforeBuy) {
+                                bot.waitingForSaleBeforeBuy = false;
+                            }
 
                             resolved = true;
                             cleanup();
