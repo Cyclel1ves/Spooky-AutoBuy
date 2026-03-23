@@ -112,6 +112,48 @@ function parseLore(loreArray) {
     return { isAuction, seller, price, timeLeft };
 }
 
+function getDisplayNameFromNbt(nbtData) {
+    try {
+        if (!nbtData || !nbtData.value) return '';
+        const display = nbtData.value.display || nbtData.value.display?.value;
+        if (!display) return '';
+
+        if (typeof display.Name === 'string') return display.Name;
+        if (display.Name && typeof display.Name.value === 'string') return display.Name.value;
+        if (display.value && typeof display.value.Name === 'string') return display.value.Name;
+        if (display.value && display.value.Name && typeof display.value.Name.value === 'string') return display.value.Name.value;
+        return '';
+    } catch (err) {
+        return '';
+    }
+}
+
+function normalizeAuctionItemText(text) {
+    return String(text || '')
+        .replace(/§./g, '')
+        .replace(/[​-‍﻿]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function isInactiveAuctionSlot(slotItem, loreArray) {
+    const labels = [
+        slotItem?.displayName,
+        slotItem?.name,
+        getDisplayNameFromNbt(slotItem?.nbt),
+        Array.isArray(loreArray) ? loreArray.map((line) => extractPlainText(line)).join(' ') : ''
+    ]
+        .map(normalizeAuctionItemText)
+        .filter(Boolean);
+
+    return labels.some((text) => (
+        text.includes('товар не актуален') ||
+        text.includes('товар неактуален') ||
+        /товар\s+не\s+актуал/i.test(text)
+    ));
+}
+
 
 function extractAllItemsFromWindow(window) {
     if (!window || !window.slots) {
@@ -123,12 +165,14 @@ function extractAllItemsFromWindow(window) {
         if (!slotItem) continue;
 
         const loreArray = getLoreFromNbt(slotItem.nbt);
-        const parsed = parseLore(loreArray);
-
-        if (!parsed.isAuction) {
+        if (isInactiveAuctionSlot(slotItem, loreArray)) {
             continue;
         }
 
+        const parsed = parseLore(loreArray);
+        if (!parsed.isAuction) {
+            continue;
+        }
 
         results.push({
             slotIndex: i,
@@ -136,6 +180,7 @@ function extractAllItemsFromWindow(window) {
             price: parsed.price,
             timeLeft: parsed.timeLeft,
             name: slotItem.name,
+            displayName: slotItem.displayName || getDisplayNameFromNbt(slotItem.nbt) || slotItem.name,
             count: slotItem.count || 1,
             nbt: slotItem.nbt
         });
