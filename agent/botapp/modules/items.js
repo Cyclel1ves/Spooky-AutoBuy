@@ -123,9 +123,9 @@ const targetItems = [
         lastUpdated: null,
         requiredNbt: {
             potionEffects: [
-                { Id: 10, Amplifier: 2, Duration: 1200 },
+                { Id: 10, Amplifier: 1, Duration: 900 },
                 { Id: 14, Amplifier: 1, Duration: 12000 },
-                { Id: 6, Amplifier: 1, Duration: 1 },
+                { Id: 6, Amplifier: 1, Duration: 0 },
             ],
             exactPotionEffects: true
         }
@@ -183,7 +183,7 @@ const targetItems = [
                 { Id: 5, Amplifier: 3, Duration: 1200 },
                 { Id: 1, Amplifier: 2, Duration: 6000 },
                 { Id: 3, Amplifier: 0, Duration: 1200 },
-                { Id: 7, Amplifier: 1, Duration: 1 },
+                { Id: 7, Amplifier: 1, Duration: 0 },
             ],
             exactPotionEffects: true
         }
@@ -258,79 +258,6 @@ const targetItems = [
                 { id: 'poison', lvl: 3 },
                 { id: 'vampirism', lvl: 2 },
                 { id: 'skilled', lvl: 3 }
-            ]
-        }
-    },
-
-    {
-        id: 'netherite_pickaxe_1',
-        name: 'netherite_pickaxe',
-        displayName: 'Молот Тора',
-        searchKeyword: 'Молот Тора',
-        absoluteMinUnitPrice: null,
-        previousAbsoluteMinUnitPrice: null,
-        buyPrice: null,
-        sellPrice: null,
-        lastUpdated: null,
-        requiredNbt: {
-            Enchantments: [
-                { id: 'funmultiversion:glint_override', lvl: 1 },
-            ],
-            customEnchantments: [
-                { id: 'magnet', lvl: 1 },
-                { id: 'megabuldozing', lvl: 1 },
-            ]
-        }
-    },
-    {
-        id: 'netherite_pickaxe_2',
-        name: 'netherite_pickaxe',
-        displayName: 'Кирка Крушителя',
-        searchKeyword: 'Кирка Крушителя',
-        absoluteMinUnitPrice: null,
-        previousAbsoluteMinUnitPrice: null,
-        buyPrice: null,
-        sellPrice: null,
-        lastUpdated: null,
-        requiredNbt: {
-            Enchantments: [
-                { id: 'funmultiversion:glint_override', lvl: 1 },
-                { id: 'minecraft:efficiency', lvl: 10 },
-                { id: 'minecraft:fortune', lvl: 5 },
-                { id: 'minecraft:mending', lvl: 1 },
-                { id: 'minecraft:unbreaking', lvl: 5 },
-            ],
-            customEnchantments: [
-                { id: 'skilled', lvl: 3 },
-                { id: 'smelting', lvl: 1 },
-                { id: 'magnet', lvl: 1 },
-                { id: 'pinger', lvl: 1 },
-                { id: 'web', lvl: 1 },
-                { id: 'buldozing', lvl: 2 },
-            ]
-        }
-    },
-    {
-        id: 'netherite_pickaxe_3',
-        name: 'netherite_pickaxe',
-        displayName: 'Кирка Сатаны',
-        searchKeyword: 'Кирка Сатаны',
-        absoluteMinUnitPrice: null,
-        previousAbsoluteMinUnitPrice: null,
-        buyPrice: null,
-        sellPrice: null,
-        lastUpdated: null,
-        requiredNbt: {
-            Enchantments: [
-                { id: 'funmultiversion:glint_override', lvl: 1 },
-                { id: 'minecraft:efficiency', lvl: 7 },
-                { id: 'minecraft:fortune', lvl: 4 },
-                { id: 'minecraft:mending', lvl: 1 },
-                { id: 'minecraft:unbreaking', lvl: 4 },
-            ],
-            customEnchantments: [
-                { id: 'smelting', lvl: 1 },
-                { id: 'magnet', lvl: 1 },
             ]
         }
     },
@@ -509,6 +436,29 @@ const targetItems = [
         lastUpdated: null,
         requiredNbt: {
             expLvl: 15
+        }
+    },
+	{
+        id: 'haosa_sphere_2',
+        name: 'player_head',
+        displayName: '[★] Сфера Хаоса об',
+        searchKeyword: 'Сфера Хаоса',
+        absoluteMinUnitPrice: null,
+        previousAbsoluteMinUnitPrice: null,
+        buyPrice: null,
+        sellPrice: null,
+        lastUpdated: null,
+        requiredNbt: {
+            Enchantments: [
+                { id: 'minecraft:vanishing_curse', lvl: 1 },
+            ],
+            AttributeModifiers: [
+                { AttributeName: 'generic.max_health', Amount: -4, Slot: 'offhand' },
+                { AttributeName: 'generic.armor', Amount: 1.5, Slot: 'offhand' },
+                { AttributeName: 'generic.attack_damage', Amount: 2.5, Slot: 'offhand' },
+                { AttributeName: 'generic.movement_speed', Amount: 0.07, Slot: 'offhand' },
+                { AttributeName: 'generic.attack_speed', Amount: 0.13, Slot: 'offhand' },
+            ]
         }
     },
     {
@@ -697,8 +647,8 @@ const targetItems = [
                 { id: 'minecraft:vanishing_curse', lvl: 1 },
             ],
             AttributeModifiers: [
-                { AttributeName: 'generic.armor', Amount: 3, Slot: 'offhand' },
-                { AttributeName: 'generic.armor_toughness', Amount: 3, Slot: 'offhand' },
+                { AttributeName: 'generic.armor', Amount: 2.5, Slot: 'offhand' },
+                { AttributeName: 'generic.armor_toughness', Amount: 2.5, Slot: 'offhand' },
                 { AttributeName: 'generic.movement_speed', Amount: -0.15, Slot: 'offhand' },
             ]
         }
